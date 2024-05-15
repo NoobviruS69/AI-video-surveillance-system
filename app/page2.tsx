@@ -14,16 +14,9 @@ import { DetectedObject, ObjectDetection } from '@tensorflow-models/coco-ssd';
 import { drawOnCanvas } from '@/utils/draw';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Chart, registerables } from 'chart.js';
 
-Chart.register(...registerables);
 
 type Props = {}
-
-interface HourlyDetection {
-  hour: string;
-  detections_count: number;
-}
 
 let interval: any = null;
 let stopTimeout: any = null;
@@ -33,32 +26,12 @@ const HomePage = (props: Props) => {
 
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [autoRecordEnabled, setAutoRecordEnabled] = useState<boolean>(false)
+  const [volume, setVolume] = useState(0.8);
   const [model, setModel] = useState<ObjectDetection>();
   const [loading, setLoading] = useState(false);
-  const [lastDetectionTime, setLastDetectionTime] = useState<Date | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
-  const [hourlyDetections, setHourlyDetections] = useState<HourlyDetection[]>([]);
-  const [detections, setDetections] = useState([]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const response = await fetch('http://localhost:8080/hourly-detections');
-        const data = await response.json();
-        setHourlyDetections(data.hourly_detections);
-        setDetections(data.total_detections);
-        console.log('Total Detections:', data.total_detections);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-  
-    fetchData();
-  }, []);
-  
-  
   // initialize the media recorder
   useEffect(() => {
     if (webcamRef && webcamRef.current) {
@@ -87,8 +60,6 @@ const HomePage = (props: Props) => {
     }
   }, [webcamRef])
 
-
-  
 
   useEffect(() => {
     setLoading(true);
@@ -124,27 +95,26 @@ const HomePage = (props: Props) => {
        drawOnCanvas(predictions, canvasRef.current?.getContext('2d'));
    
        let isPersonDetected: boolean = false;
-       let screenshot: string | null = null;
-    let faceImageData: string | null = null;
-    predictions.forEach(async (prediction) => {
-      if (prediction.class === 'person') {
-        isPersonDetected = true;
-        screenshot = webcamRef.current.getScreenshot();
-      }
-    });
+       predictions.forEach((prediction) => {
+         if (prediction.class === 'person') {
+           isPersonDetected = true;
+         }
+       });
    
        if (isPersonDetected) {
          // Prepare the detection data
-         setLastDetectionTime(new Date());
-         const blob = base64toBlob(screenshot);
+         const detectionData = {
+          timestamp: new Date().toISOString(),
+          // Add other relevant detection data here if needed
+        };
+   
          // Send the detection data to the server
          
        if (isPersonDetected && autoRecordEnabled && mediaRecorderRef.current?.state !== 'recording') {
          // Start recording if a person is detected, auto-record is enabled, and not already recording
          const detectionData = {
           timestamp: new Date().toISOString(),
-          userIdentifier: 'user123',
-          screenshot: blob,
+          // Add other relevant detection data here if needed
         };
   
         // Send the detection data to the server
@@ -166,55 +136,11 @@ const HomePage = (props: Props) => {
          mediaRecorderRef.current.stop();
          toast('Recording stopped: No detections');
        }
-       else if (lastDetectionTime) {
-      // If no person is detected and there was a last detection time, stop recording after 5 seconds
-      const fiveSecondsLater = new Date(lastDetectionTime.getTime() + 3000); // 5000 milliseconds = 5 seconds
-      if (new Date() >= fiveSecondsLater) {
-        // Stop recording if 5 seconds have passed since the last detection
-        mediaRecorderRef.current?.requestData();
-        mediaRecorderRef.current?.stop();
-        toast('Recording stopped: No detections for 5 seconds');
-      }
-    }
     }
    } 
 }
-let chartInstance: Chart | undefined;
-
-
-
-useEffect(() => {
-  // Initialize the chart instance
-  const ctx = document.getElementById('hourlyDetectionsChart').getContext('2d');
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: hourlyDetections.map(item => item.hour),
-      datasets: [{
-        label: 'Hourly Detections',
-        data: hourlyDetections.map(item => item.detections_count),
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      scales: {
-        y: {
-          beginAtZero: true
-        }
-      }
-    }
-  });
-
-  // Cleanup function to destroy the chart instance
-  return () => {
-    if (chartInstance) {
-      chartInstance.destroy();
-    }
-  };
-}, [hourlyDetections]); // Re-run the effect when hourlyDetections changes
-
+   
+   
 
   useEffect(() => {
     interval = setInterval(() => {
@@ -300,17 +226,16 @@ useEffect(() => {
             <p className="text-sm font-medium leading-none text-gray-500 dark:text-gray-400">Past 24 hours</p>
           </CardHeader>
           <CardContent className="flex items-center justify-center p-8">
-          <span className="text-5xl font-semibold tracking-tighter">{detections}</span>
+            <span className="text-5xl font-semibold tracking-tighter">3,210</span>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             <h2 className="text-lg font-semibold">Hourly Detections</h2>
             <p className="text-sm font-medium leading-none text-gray-500 dark:text-gray-400">Past 7 days</p>
           </CardHeader>
           <CardContent className="flex items-center justify-center p-6">
-          <canvas id="hourlyDetectionsChart" width="400" height="400"></canvas>
+            
           </CardContent>
         </Card>
       </div>
@@ -449,20 +374,24 @@ useEffect(() => {
   function toggleAutoRecord() {
     if (autoRecordEnabled) {
       setAutoRecordEnabled(false);
-      toast('Autorecord disabled');
-      // Check if the app is currently recording and stop it
-      if (mediaRecorderRef.current?.state === 'recording') {
-        mediaRecorderRef.current?.requestData();
-        mediaRecorderRef.current?.stop();
-        toast('Recording stopped: Autorecord disabled');
-      }
+      toast('Autorecord disabled')
+      // show toast to user to notify the change
+
     } else {
       setAutoRecordEnabled(true);
-      toast('Autorecord enabled');
+      toast('Autorecord enabled')
+      // show toast
     }
+
   }
-  
- 
+
+
+  // inner components
+  function RenderFeatureHighlightsSection() {
+    return <div className="text-xs text-muted-foreground">
+      
+    </div>
+  }
 }
 
 export default HomePage
@@ -505,5 +434,5 @@ function base64toBlob(base64Data: any) {
     byteArray[i] = byteCharacters.charCodeAt(i);
   }
 
-  return new Blob([arrayBuffer], { type: "image/png" }); 
+  return new Blob([arrayBuffer], { type: "image/png" }); // Specify the image type here
 }

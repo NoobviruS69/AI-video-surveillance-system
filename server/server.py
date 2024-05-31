@@ -46,7 +46,7 @@ def check_and_upload_videos():
                   upload_result = cloudinary.uploader.upload(f, resource_type="video")
                   print(f"Uploaded {filename} to Cloudinary: {upload_result['url']}")
                   # Optional: Move or delete the file after uploading
-                  os.rename(file_path, os.path.join(downloads_folder, 'uploaded_' + filename))
+                  os.remove(file_path)
       
     
 
@@ -55,6 +55,7 @@ def check_and_upload_videos():
 @app.route('/get_video_urls', methods=['GET'])
 def get_video_urls():
     try:
+        check_and_upload_videos()  # Call the function here to check and upload videos
         # Fetch all video resources from Cloudinary
         result = cloudinary.api.resources(resource_type="video")
         
@@ -86,6 +87,7 @@ def detect():
               (timestamp, user_identifier))
     conn.commit()
     total_detections += 1
+    send_notification('hello')
     return jsonify({"status": "success", "message": "Detection data received"}), 200
 
 @app.route("/hourly-detections", methods=['GET'])
@@ -113,7 +115,6 @@ def get_detected_persons():
 
 if __name__ == '__main__':
     try:
-        check_and_upload_videos()
         app.run(debug=True, port=8080)
     finally:
         conn.close()
